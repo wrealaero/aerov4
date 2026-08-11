@@ -4,7 +4,7 @@ if shared.vape then shared.vape:Uninject() end
 local LOADER_URL = "https://raw.githubusercontent.com/wrealaero/aerov4/main/downloader.lua" 
 local _initArgs = ...
 if type(_initArgs) ~= "table" then _initArgs = {} end
-shared.SkidV4User = "fuck nigga"
+shared.aerov4User = "fuck nigga"
 
 if identifyexecutor then
 	if table.find({'Wave', 'Seliware', 'Volt'}, ({identifyexecutor()})[1]) then
@@ -38,18 +38,23 @@ local isfile = isfile or function(file)
 	return suc and res ~= nil and res ~= ''
 end
 
-if identifyexecutor and ({identifyexecutor()})[1] == 'Madium' then
+if identifyexecutor and table.find({'Madium', 'Medium'}, ({identifyexecutor()})[1]) then
 	local realgca = getcustomasset or getsynasset
 	if realgca then
 		getgenv().getcustomasset = function(path, ...)
-			for _ = 1, 10 do
-				if isfile(path) then
-					local ok, res = pcall(realgca, path, ...)
-					if ok and res and res ~= '' then
-						return res
-					end
-				end
+			local args = {...}
+			local function try()
+				if not isfile(path) then return nil end
+				local ok, res = pcall(function() return realgca(path, table.unpack(args)) end)
+				if ok and res and res ~= '' then return res end
+				return nil
+			end
+			local res = try()
+			if res then return res end
+			for _ = 1, 60 do
 				task.wait(0.05)
+				res = try()
+				if res then return res end
 			end
 			return 'rbxassetid://0'
 		end
@@ -130,7 +135,7 @@ pcall(migrateProfiles)
 local function finishLoading()
 	vape.Init = nil
 	if not vape.Load then
-		warn('[SKIDV4] vape.Load is nil skipping load')
+		warn('[aerov4] vape.Load is nil skipping load')
 		return
 	end
 	vape:Load()
@@ -174,10 +179,14 @@ local function finishLoading()
 		queueTeleport()
 	end))
 
+	vape:Clean(function()
+		pcall(clear_teleport_queue)
+	end)
+
 	if not shared.vapereload then
 		if not vape.Categories then return end
 		if vape.Categories.Main.Options['GUI bind indicator'].Enabled then
-			vape:CreateNotification('[SKIDV4] Finished Loading', 'wsg ' .. shared.SkidV4User .. ' ' .. (vape.VapeButton and 'Press the button in the top right to open GUI' or 'Press ' .. table.concat(vape.Keybind, ' + '):upper() .. ' to open GUI'), 5)
+			vape:CreateNotification('[aerov4] Finished Loading', 'wsg ' .. shared.aerov4User .. ' ' .. (vape.VapeButton and 'Press the button in the top right to open GUI' or 'Press ' .. table.concat(vape.Keybind, ' + '):upper() .. ' to open GUI'), 5)
 		end
 	end
 end
@@ -209,18 +218,18 @@ if not guiFunc then
 		end
 		context = '\n\nContext:\n' .. table.concat(parts, '\n')
 	end
-	error('[SKIDV4] syntax error in ' .. gui .. '.lua' .. '\n' .. errMsg .. context)
+	error('[aerov4] syntax error in ' .. gui .. '.lua' .. '\n' .. errMsg .. context)
 end
 vape = guiFunc()
 if not vape then
-	error('[SKIDV4] GUI returned nil file may be corrupted try deleting aerov4/guis/' .. gui .. '.lua and reinjecting.')
+	error('[aerov4] GUI returned nil file may be corrupted try deleting aerov4/guis/' .. gui .. '.lua and reinjecting.')
 end
 if not vape.Load then
 	if delfile then pcall(function() delfile('aerov4/guis/' .. gui .. '.lua') end) end
-	error('[SKIDV4] gui file corrupted (missing load) reinject..')
+	error('[aerov4] gui file corrupted (missing load) reinject..')
 end
 if not vape.Init and not vape.Load then
-	error('[SKIDV4] failed to initialize properly reinject to fix this bs')
+	error('[aerov4] failed to initialize properly reinject to fix this bs')
 end
 shared.vape = vape
 task.wait(0.1)
