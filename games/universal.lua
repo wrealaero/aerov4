@@ -3829,6 +3829,10 @@ run(function()
 					end
 				end
 	
+				if not ent.RootPart or not ent.RootPart.Parent then
+					for _, obj in EntityESP do obj.Visible = false end
+					continue
+				end
 				local rootPos, rootVis = gameCamera:WorldToViewportPoint(ent.RootPart.Position)
 				for _, obj in EntityESP do
 					obj.Visible = rootVis
