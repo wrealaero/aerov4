@@ -3841,15 +3841,15 @@ run(function()
 	
 				local topPos = gameCamera:WorldToViewportPoint((CFrame.lookAlong(ent.RootPart.Position, gameCamera.CFrame.LookVector) * CFrame.new(2, ent.HipHeight, 0)).p)
 				local bottomPos = gameCamera:WorldToViewportPoint((CFrame.lookAlong(ent.RootPart.Position, gameCamera.CFrame.LookVector) * CFrame.new(-2, -ent.HipHeight - 1, 0)).p)
-				local sizex, sizey = topPos.X - bottomPos.X, topPos.Y - bottomPos.Y
+				local sizex, sizey = math.abs(topPos.X - bottomPos.X), math.abs(topPos.Y - bottomPos.Y)
 				local posx, posy = (rootPos.X - sizex / 2),  ((rootPos.Y - sizey / 2))
 				EntityESP.Main.Position = Vector2.new(posx, posy) // 1
 				EntityESP.Main.Size = Vector2.new(sizex, sizey) // 1
 				if EntityESP.Border then
 					EntityESP.Border.Position = Vector2.new(posx - 1, posy + 1) // 1
-					EntityESP.Border.Size = Vector2.new(sizex + 2, sizey - 2) // 1
+					EntityESP.Border.Size = Vector2.new(math.max(sizex + 2, 0), math.max(sizey - 2, 0)) // 1
 					EntityESP.Border2.Position = Vector2.new(posx + 1, posy - 1) // 1
-					EntityESP.Border2.Size = Vector2.new(sizex - 2, sizey + 2) // 1
+					EntityESP.Border2.Size = Vector2.new(math.max(sizex - 2, 0), math.max(sizey + 2, 0)) // 1
 				end
 	
 				if EntityESP.HealthLine then
