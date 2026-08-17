@@ -22,7 +22,7 @@ local function solveQuadric(c0, c1, c2)
 		return s0
 	elseif (D < 0) then
 		return
-	else 
+	else
 		local sqrt_D = math.sqrt(D)
 
 		s0 = sqrt_D - p
@@ -60,7 +60,7 @@ local function solveCubic(c0, c1, c2, c3)
 			s1 = -u
 			num = 2
 		end
-	elseif (D < 0) then 
+	elseif (D < 0) then
 		local phi = (1 / 3) * math.acos(-q / math.sqrt(-cb_p))
 		local t = 2 * math.sqrt(-p)
 
@@ -68,7 +68,7 @@ local function solveCubic(c0, c1, c2, c3)
 		s1 = -t * math.cos(phi + math.pi / 3)
 		s2 = -t * math.cos(phi - math.pi / 3)
 		num = 3
-	else 
+	else
 		local sqrt_D = math.sqrt(D)
 		local u = cuberoot(sqrt_D - q)
 		local v = -cuberoot(sqrt_D + q)
@@ -182,60 +182,68 @@ function module.solveQuartic(c0, c1, c2, c3, c4)
 	return {s3, s2, s1, s0}
 end
 
-function module.SolveTrajectory(origin, projectileSpeed, gravity, targetPos, targetVelocity, playerGravity, playerHeight, playerJump, params)
+function module.SolveTrajectory(origin, projectileSpeed, gravity, targetPos, targetVelocity, playerGravity, playerHeight, playerJump, params, targetAirborne)
 	local disp = targetPos - origin
 	local p, q, r = targetVelocity.X, targetVelocity.Y, targetVelocity.Z
 	local h, j, k = disp.X, disp.Y, disp.Z
 	local l = -.5 * gravity
-	if math.abs(q) > 0.01 and playerGravity and playerGravity > 0 then
-		local estTime = (disp.Magnitude / projectileSpeed)
-		local origq = q
-		local origj = j
-		for i = 1, 100 do
-			q -= (.5 * playerGravity) * estTime
-			local velo = targetVelocity * 0.016
-			local ray = workspace.Raycast(workspace, Vector3.new(targetPos.X, targetPos.Y, targetPos.Z), Vector3.new(velo.X, (q * estTime) - playerHeight, velo.Z), params)
+
+	local isFalling = (targetAirborne == true) or (math.abs(q) > 0.01)
+	if isFalling and playerGravity and playerGravity > 0 and params then
+		local estTime = disp.Magnitude / projectileSpeed
+		local simPos = targetPos
+		local simVelY = q
+		for _ = 1, 12 do
+			local horiz = Vector3.new(targetVelocity.X, 0, targetVelocity.Z) * estTime
+			local vertDrop = (simVelY * estTime) - (0.5 * playerGravity * estTime * estTime)
+			local rayDir = Vector3.new(horiz.X, vertDrop - playerHeight, horiz.Z)
+			local ray = workspace:Raycast(simPos, rayDir, params)
 			if ray then
-				local newTarget = ray.Position + Vector3.new(0, playerHeight, 0)
-				estTime -= math.sqrt(((targetPos - newTarget).Magnitude * 2) / playerGravity)
-				targetPos = newTarget
-				j = (targetPos - origin).Y
-				q = 0
+				local landed = ray.Position + Vector3.new(0, playerHeight, 0)
+				estTime = (landed - origin).Magnitude / projectileSpeed
+				simPos = landed
 				break
 			else
-				break
+				simPos = simPos + Vector3.new(horiz.X, vertDrop, horiz.Z)
+				simVelY = simVelY - playerGravity * estTime
 			end
 		end
+		targetPos = simPos
+		disp = targetPos - origin
+		h, j, k = disp.X, disp.Y, disp.Z
+		q = 0 
 	end
 
 	local solutions = module.solveQuartic(
-		l*l,
-		-2*q*l,
-		q*q - 2*j*l - projectileSpeed*projectileSpeed + p*p + r*r,
-		2*j*q + 2*h*p + 2*k*r,
-		j*j + h*h + k*k
+		l * l,
+		-2 * q * l,
+		q * q - 2 * j * l - projectileSpeed * projectileSpeed + p * p + r * r,
+		2 * j * q + 2 * h * p + 2 * k * r,
+		j * j + h * h + k * k
 	)
+
 	if solutions then
-		local posRoots = table.create(2)
-		for _, v in solutions do
-			if v > 0 then
-				table.insert(posRoots, v)
+		local best
+		for _, tv in solutions do
+			if tv and tv > 0 then
+				if not best or tv < best then
+					best = tv
+				end
 			end
 		end
-		posRoots[1] = posRoots[1]
-		if posRoots[1] then
-			local t = posRoots[1]
-			local d = (h + p*t)/t
-			local e = (j + q*t - l*t*t)/t
-			local f = (k + r*t)/t
-			return origin + Vector3.new(d, e, f)
+		if best then
+			local t = best
+			local d = (h + p * t) / t
+			local e = (j + q * t - l * t * t) / t
+			local f = (k + r * t) / t
+			return origin + Vector3.new(d, e, f), t
 		end
 	elseif gravity == 0 then
 		local t = (disp.Magnitude / projectileSpeed)
-		local d = (h + p*t)/t
-		local e = (j + q*t - l*t*t)/t
-		local f = (k + r*t)/t
-		return origin + Vector3.new(d, e, f)
+		local d = (h + p * t) / t
+		local e = (j + q * t - l * t * t) / t
+		local f = (k + r * t) / t
+		return origin + Vector3.new(d, e, f), t
 	end
 end
 
