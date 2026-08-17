@@ -1,6 +1,4 @@
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
+
 local mainapi = {
 	Categories = {},
 	GUIColor = {
@@ -6371,6 +6369,7 @@ function mainapi:CreateSearch()
 		local lowerSearch = search.Text:lower()
 		local added = {}
 			
+		local orderCounter = 0
 		for i, v in self.Modules do
 			if not v then continue end
 			local matchType = nil
@@ -6412,7 +6411,9 @@ function mainapi:CreateSearch()
 
 			if matchType and not added[i] then
 				added[i] = true
+				orderCounter = orderCounter + 1
 				local button = v.Object:Clone()
+				button.LayoutOrder = orderCounter * 2
 				if button.Bind then button.Bind:Destroy() end
 				if button.Favorite then button.Favorite:Destroy() end
 
@@ -6420,27 +6421,57 @@ function mainapi:CreateSearch()
 					v:Toggle()
 				end)
 
-				button.MouseButton2Click:Connect(function()
-					v.Object.Parent.Parent.Visible = true
-					local frame = v.Object.Parent
-					local highlight = Instance.new('Frame')
-					highlight.Size = UDim2.fromScale(1, 1)
-					highlight.BackgroundColor3 = Color3.new(1, 1, 1)
-					highlight.BackgroundTransparency = 0.3
-					highlight.BorderSizePixel = 0
-					highlight.Parent = v.Object
-					tween:Tween(highlight, TweenInfo.new(0.5), {
-						BackgroundTransparency = 1
-					})
-					task.delay(0.5, highlight.Destroy, highlight)
+				local lastRightClick = 0
+				local homeParent, homeLayoutOrder
+				if v.Children then
+					homeParent = v.Children.Parent
+					homeLayoutOrder = v.Children.LayoutOrder
+				end
 
-					local cat = mainapi.Categories[v.Category]
-					if cat and not cat.Expanded then
-						task.wait(0.05) 
-						cat:Expand()
+				local function restoreChildren()
+					if v.Children and homeParent then
+						v.Children.Parent = homeParent
+						v.Children.LayoutOrder = homeLayoutOrder
+						v.Children.Visible = false
 					end
+				end
 
-					frame.CanvasPosition = Vector2.new(0, (v.Object.LayoutOrder * 40) - (math.min(frame.CanvasSize.Y.Offset, 600) / 2))
+				button.Destroying:Connect(restoreChildren)
+
+				button.MouseButton2Click:Connect(function()
+					local now = tick()
+					if (now - lastRightClick) < 0.35 then
+						lastRightClick = 0
+						restoreChildren()
+
+						v.Object.Parent.Parent.Visible = true
+						local frame = v.Object.Parent
+						local highlight = Instance.new('Frame')
+						highlight.Size = UDim2.fromScale(1, 1)
+						highlight.BackgroundColor3 = Color3.new(1, 1, 1)
+						highlight.BackgroundTransparency = 0.3
+						highlight.BorderSizePixel = 0
+						highlight.Parent = v.Object
+						tween:Tween(highlight, TweenInfo.new(0.5), {
+							BackgroundTransparency = 1
+						})
+						task.delay(0.5, highlight.Destroy, highlight)
+
+						local cat = mainapi.Categories[v.Category]
+						if cat and not cat.Expanded then
+							task.wait(0.05) 
+							cat:Expand()
+						end
+
+						frame.CanvasPosition = Vector2.new(0, (v.Object.LayoutOrder * 40) - (math.min(frame.CanvasSize.Y.Offset, 600) / 2))
+					else
+						lastRightClick = now
+						if v.Children then
+							v.Children.Parent = button.Parent
+							v.Children.LayoutOrder = button.LayoutOrder + 1
+							v.Children.Visible = not v.Children.Visible
+						end
+					end
 				end)
 
 				if matchType == "name" or matchType == "option" or matchType == "alias" or matchType == "tag" then
