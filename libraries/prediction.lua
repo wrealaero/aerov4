@@ -182,24 +182,23 @@ function module.solveQuartic(c0, c1, c2, c3, c4)
 	return {s3, s2, s1, s0}
 end
 
-function module.SolveTrajectory(origin, projectileSpeed, gravity, targetPos, targetVelocity, playerGravity, playerHeight, playerJump, params, targetAirborne)
-	local disp = targetPos - origin
-	local p, q, r = targetVelocity.X, targetVelocity.Y, targetVelocity.Z
-	local h, j, k = disp.X, disp.Y, disp.Z
-	local l = -.5 * gravity
+function module.SolveTrajectory(origin, projectileSpeed, gravity, targetPos, targetVelocity, playerGravity, playerHeight, playerJump, params, targetAirborne, horizLead, vertLead)
+	horizLead = horizLead or 1
+	vertLead = vertLead or 1
 
-	local isFalling = (targetAirborne == true) or (math.abs(q) > 0.01)
+	local isFalling = (targetAirborne == true) or (math.abs(targetVelocity.Y) > 0.01)
 	if isFalling and playerGravity and playerGravity > 0 and params then
+		local disp = targetPos - origin
 		local estTime = disp.Magnitude / projectileSpeed
 		local simPos = targetPos
-		local simVelY = q
+		local simVelY = targetVelocity.Y
 		for _ = 1, 12 do
 			local horiz = Vector3.new(targetVelocity.X, 0, targetVelocity.Z) * estTime
 			local vertDrop = (simVelY * estTime) - (0.5 * playerGravity * estTime * estTime)
-			local rayDir = Vector3.new(horiz.X, vertDrop - playerHeight, horiz.Z)
+			local rayDir = Vector3.new(horiz.X, vertDrop - (playerHeight or 0), horiz.Z)
 			local ray = workspace:Raycast(simPos, rayDir, params)
 			if ray then
-				local landed = ray.Position + Vector3.new(0, playerHeight, 0)
+				local landed = ray.Position + Vector3.new(0, playerHeight or 0, 0)
 				estTime = (landed - origin).Magnitude / projectileSpeed
 				simPos = landed
 				break
@@ -209,41 +208,55 @@ function module.SolveTrajectory(origin, projectileSpeed, gravity, targetPos, tar
 			end
 		end
 		targetPos = simPos
-		disp = targetPos - origin
-		h, j, k = disp.X, disp.Y, disp.Z
-		q = 0 
+		targetVelocity = Vector3.new(targetVelocity.X, 0, targetVelocity.Z)
 	end
 
-	local solutions = module.solveQuartic(
-		l * l,
-		-2 * q * l,
-		q * q - 2 * j * l - projectileSpeed * projectileSpeed + p * p + r * r,
-		2 * j * q + 2 * h * p + 2 * k * r,
-		j * j + h * h + k * k
-	)
+	local leadVelocity = Vector3.new(targetVelocity.X * horizLead, targetVelocity.Y * vertLead, targetVelocity.Z * horizLead)
 
-	if solutions then
-		local best
-		for _, tv in solutions do
-			if tv and tv > 0 then
-				if not best or tv < best then
-					best = tv
-				end
-			end
+	if isZero(gravity) then
+		local t = (targetPos - origin).Magnitude / projectileSpeed
+		for _ = 1, 6 do
+			local predicted = targetPos + leadVelocity * t
+			t = (predicted - origin).Magnitude / projectileSpeed
 		end
-		if best then
-			local t = best
-			local d = (h + p * t) / t
-			local e = (j + q * t - l * t * t) / t
-			local f = (k + r * t) / t
-			return origin + Vector3.new(d, e, f), t
+		return targetPos + leadVelocity * t, t
+	end
+
+	local t = (targetPos - origin).Magnitude / projectileSpeed
+	local v2 = projectileSpeed * projectileSpeed
+
+	for i = 1, 10 do
+		local predicted = targetPos + leadVelocity * t
+		local toTarget = predicted - origin
+		local flat = Vector3.new(toTarget.X, 0, toTarget.Z)
+		local dist = flat.Magnitude
+		local dy = toTarget.Y
+
+		if dist < eps then
+			return nil
 		end
-	elseif gravity == 0 then
-		local t = (disp.Magnitude / projectileSpeed)
-		local d = (h + p * t) / t
-		local e = (j + q * t - l * t * t) / t
-		local f = (k + r * t) / t
-		return origin + Vector3.new(d, e, f), t
+
+		local underRoot = v2 * v2 - gravity * (gravity * dist * dist + 2 * dy * v2)
+		if underRoot < 0 then
+			return nil
+		end
+
+		local root = math.sqrt(underRoot)
+		local tanTheta = (v2 - root) / (gravity * dist)
+		local theta = math.atan(tanTheta)
+		local vy = projectileSpeed * math.sin(theta)
+		local vxz = projectileSpeed * math.cos(theta)
+
+		if vxz < eps then
+			return nil
+		end
+
+		t = dist / vxz
+
+		if i == 10 then
+			local horizUnit = flat.Unit
+			return origin + Vector3.new(horizUnit.X * vxz, vy, horizUnit.Z * vxz), t
+		end
 	end
 end
 
