@@ -104,6 +104,9 @@ end
 
 entitylib.IgnoreObject = RaycastParams.new()
 entitylib.IgnoreObject.RespectCanCollide = true
+entitylib.Raycast = function(origin, direction, params)
+	return workspace:Raycast(origin, direction, params)
+end
 entitylib.Wallcheck = function(origin, position, ignoreobject)
 	if typeof(ignoreobject) ~= 'Instance' then
 		local ignorelist = {gameCamera, lplr.Character}
@@ -122,7 +125,7 @@ entitylib.Wallcheck = function(origin, position, ignoreobject)
 		ignoreobject = entitylib.IgnoreObject
 		ignoreobject.FilterDescendantsInstances = ignorelist
 	end
-	return workspace.Raycast(workspace, origin, (position - origin), ignoreobject)
+	return entitylib.Raycast(origin, position - origin, ignoreobject)
 end
 
 entitylib.EntityMouse = function(entitysettings)
@@ -150,7 +153,7 @@ entitylib.EntityMouse = function(entitysettings)
 
 		for _, v in sortingTable do
 			if entitysettings.Wallcheck then
-				if entitylib.Wallcheck(entitysettings.Origin, v.Entity[entitysettings.Part].Position, entitysettings.Wallcheck) then continue end
+				if entitylib.Wallcheck(entitysettings.Origin, v.Entity[entitysettings.Part].Position, entitysettings.Wallcheck, v.Entity) then continue end
 			end
 			table.clear(entitysettings)
 			table.clear(sortingTable)
@@ -184,7 +187,7 @@ entitylib.EntityPosition = function(entitysettings)
 
 		for _, v in sortingTable do
 			if entitysettings.Wallcheck then
-				if entitylib.Wallcheck(localPosition, v.Entity[entitysettings.Part].Position, entitysettings.Wallcheck) then continue end
+				if entitylib.Wallcheck(localPosition, v.Entity[entitysettings.Part].Position, entitysettings.Wallcheck, v.Entity) then continue end
 			end
 			table.clear(entitysettings)
 			table.clear(sortingTable)
@@ -219,7 +222,7 @@ entitylib.AllPosition = function(entitysettings)
 
 		for _, v in sortingTable do
 			if entitysettings.Wallcheck then
-				if entitylib.Wallcheck(localPosition, v.Entity[entitysettings.Part].Position, entitysettings.Wallcheck) then continue end
+				if entitylib.Wallcheck(localPosition, v.Entity[entitysettings.Part].Position, entitysettings.Wallcheck, v.Entity) then continue end
 			end
 			table.insert(returned, v.Entity)
 			if #returned >= (entitysettings.Limit or math.huge) then break end
@@ -247,23 +250,6 @@ entitylib.addEntity = function(char, plr, teamfunc, spawntime)
 		local hum = waitForChildOfType(char, 'Humanoid', 10)
 		local humrootpart = hum and waitForChildOfType(hum, 'RootPart', workspace.StreamingEnabled and 9e9 or 10, true)
 		local head = char:WaitForChild('Head', 10) or humrootpart
-
-		if plr == nil then
-			local node = char
-			local isShop = false
-			while node and node ~= workspace do
-				local nm = node.Name:lower()
-				if nm:find('_shop') or nm == 'npchitbox' or nm == 'florist' or nm == 'desertmerchant' then
-					isShop = true
-					break
-				end
-				node = node.Parent
-			end
-			if isShop then
-				entitylib.EntityThreads[char] = nil
-				return
-			end
-		end
 
 		if hum and humrootpart then
 			local entity = {
@@ -300,6 +286,24 @@ entitylib.addEntity = function(char, plr, teamfunc, spawntime)
 				table.insert(entitylib.List, entity)
 				entitylib.Events.EntityAdded:Fire(entity)
 			end
+			--[[table.insert(entity.Connections, char.ChildRemoved:Connect(function(part)
+				if (part == humrootpart or part == hum or part == head) then
+					local found = char:FindFirstChild(part.Name)
+					if found then
+						if part == humrootpart then
+							entity.HumanoidRootPart = found
+							entity.RootPart = found
+							humrootpart = found
+							return
+						elseif part == head then
+							entity.Head = found
+							head = found
+							return
+						end
+					end
+					entitylib.removeEntity(char, plr == lplr)
+				end
+			end))]]
 		end
 
 		entitylib.EntityThreads[char] = nil
@@ -315,6 +319,7 @@ entitylib.removeEntity = function(char, isLocal)
 			end
 			table.clear(entitylib.character.Connections)
 			entitylib.Events.LocalRemoved:Fire(entitylib.character)
+			--table.clear(entitylib.character)
 		end
 
 		return
@@ -340,8 +345,9 @@ entitylib.removeEntity = function(char, isLocal)
 end
 
 entitylib.refreshEntity = function(char, plr, spawntime)
+	local entity = entitylib.getEntity(plr)
 	entitylib.removeEntity(char)
-	entitylib.addEntity(char, plr, nil, spawntime)
+	entitylib.addEntity(char, plr, entity and entity.TeamCheck or nil, spawntime)
 end
 
 entitylib.addPlayer = function(plr)
@@ -368,7 +374,7 @@ entitylib.addPlayer = function(plr)
 				table.clear(cloned)
 			else
 				local entity = entitylib.getEntity(plr)
-				if entity and entity.Targetable ~= entitylib.targetCheck(entity) then
+				if entity then
 					entitylib.refreshEntity(entity.Character, plr)
 				end
 			end
@@ -403,24 +409,8 @@ entitylib.start = function()
 		end),
 		workspace:GetPropertyChangedSignal('CurrentCamera'):Connect(function()
 			gameCamera = workspace.CurrentCamera or workspace:FindFirstChildWhichIsA('Camera')
-		end),
-		workspace.DescendantAdded:Connect(function(obj)
-			if obj.Name == 'Humanoid' and not playersService:GetPlayerFromCharacter(obj.Parent) then
-				entitylib.refreshEntity(obj.Parent, nil)
-			end
-		end),
-		workspace.DescendantRemoving:Connect(function(obj)
-			if obj.Name == 'Humanoid' and not playersService:GetPlayerFromCharacter(obj.Parent) then
-				entitylib.removeEntity(obj.Parent)
-			end
 		end)
 	}
-
-	for _, obj in workspace:GetDescendants() do
-		if obj.Name == 'Humanoid' and not playersService:GetPlayerFromCharacter(obj.Parent) then
-			entitylib.addEntity(obj.Parent, nil)
-		end
-	end
 
 	for _, player in playersService:GetPlayers() do
 		entitylib.addPlayer(player)
