@@ -187,28 +187,31 @@ function module.SolveTrajectory(origin, projectileSpeed, gravity, targetPos, tar
 	vertLead = vertLead or 1
 
 	local isFalling = (targetAirborne == true) or (math.abs(targetVelocity.Y) > 0.01)
-	if isFalling and playerGravity and playerGravity > 0 and params then
-		local disp = targetPos - origin
-		local estTime = disp.Magnitude / projectileSpeed
+	if isFalling and playerGravity and playerGravity > 0 then
+		local flightTime = (targetPos - origin).Magnitude / projectileSpeed
+		local step = flightTime / 16
 		local simPos = targetPos
 		local simVelY = targetVelocity.Y
-		for _ = 1, 12 do
-			local horiz = Vector3.new(targetVelocity.X, 0, targetVelocity.Z) * estTime
-			local vertDrop = (simVelY * estTime) - (0.5 * playerGravity * estTime * estTime)
-			local rayDir = Vector3.new(horiz.X, vertDrop - (playerHeight or 0), horiz.Z)
-			local ray = workspace:Raycast(simPos, rayDir, params)
-			if ray then
-				local landed = ray.Position + Vector3.new(0, playerHeight or 0, 0)
-				estTime = (landed - origin).Magnitude / projectileSpeed
-				simPos = landed
-				break
-			else
-				simPos = simPos + Vector3.new(horiz.X, vertDrop, horiz.Z)
-				simVelY = simVelY - playerGravity * estTime
+		local horizStep = Vector3.new(targetVelocity.X, 0, targetVelocity.Z) * step
+		local elapsed = 0
+		for _ = 1, 16 do
+			local nextY = simPos.Y + (simVelY * step) - (0.5 * playerGravity * step * step)
+			local nextPos = Vector3.new(simPos.X + horizStep.X, nextY, simPos.Z + horizStep.Z)
+			if params then
+				local down = workspace:Raycast(simPos, Vector3.new(0, nextY - simPos.Y - (playerHeight or 0), 0), params)
+				if down and simVelY < 0 then
+					simPos = down.Position + Vector3.new(0, playerHeight or 0, 0)
+					simVelY = 0
+					break
+				end
 			end
+			simPos = nextPos
+			simVelY = simVelY - playerGravity * step
+			elapsed = elapsed + step
+			if elapsed >= flightTime then break end
 		end
 		targetPos = simPos
-		targetVelocity = Vector3.new(targetVelocity.X, 0, targetVelocity.Z)
+		targetVelocity = Vector3.new(targetVelocity.X, simVelY * 0.5, targetVelocity.Z)
 	end
 
 	local leadVelocity = Vector3.new(targetVelocity.X * horizLead, targetVelocity.Y * vertLead, targetVelocity.Z * horizLead)
