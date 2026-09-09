@@ -182,85 +182,85 @@ function module.solveQuartic(c0, c1, c2, c3, c4)
 	return {s3, s2, s1, s0}
 end
 
-function module.SolveTrajectory(origin, projectileSpeed, gravity, targetPos, targetVelocity, playerGravity, playerHeight, playerJump, params, targetAirborne, horizLead, vertLead)
-	horizLead = horizLead or 1
-	vertLead = vertLead or 1
+function module.SolveTrajectory(origin, projectileSpeed, gravity, targetPos, targetVelocity, playerGravity, playerHeight, playerJump, params, targetAirborne, horizLead, vertLead, maxTime)
+	if type(horizLead) ~= 'number' then horizLead = 1 end
+	if type(vertLead) ~= 'number' then vertLead = 1 end
+	if type(maxTime) ~= 'number' then maxTime = nil end
+	if not projectileSpeed or projectileSpeed <= 0 then return nil end
 
-	local isFalling = (targetAirborne == true) or (math.abs(targetVelocity.Y) > 0.01)
-	if isFalling and playerGravity and playerGravity > 0 then
-		local flightTime = (targetPos - origin).Magnitude / projectileSpeed
-		local step = flightTime / 16
-		local simPos = targetPos
-		local simVelY = targetVelocity.Y
-		local horizStep = Vector3.new(targetVelocity.X, 0, targetVelocity.Z) * step
-		local elapsed = 0
-		for _ = 1, 16 do
-			local nextY = simPos.Y + (simVelY * step) - (0.5 * playerGravity * step * step)
-			local nextPos = Vector3.new(simPos.X + horizStep.X, nextY, simPos.Z + horizStep.Z)
-			if params then
-				local down = workspace:Raycast(simPos, Vector3.new(0, nextY - simPos.Y - (playerHeight or 0), 0), params)
-				if down and simVelY < 0 then
-					simPos = down.Position + Vector3.new(0, playerHeight or 0, 0)
-					simVelY = 0
-					break
-				end
-			end
-			simPos = nextPos
-			simVelY = simVelY - playerGravity * step
-			elapsed = elapsed + step
-			if elapsed >= flightTime then break end
+	targetVelocity = targetVelocity or Vector3.zero
+	gravity = gravity or 0
+	playerGravity = playerGravity or 0
+	playerHeight = playerHeight or 0
+
+	local velX = targetVelocity.X * horizLead
+	local velZ = targetVelocity.Z * horizLead
+	local velY = math.clamp(targetVelocity.Y * vertLead, -196, 60)
+
+	local airborne = (targetAirborne == true) or (targetVelocity.Y < -12) or (targetVelocity.Y > 12)
+	local groundY = targetPos.Y
+	if airborne and playerGravity > 0 then
+		groundY = nil
+		if params then
+			local hit = workspace:Raycast(targetPos, Vector3.new(0, -200, 0), params)
+			if hit then groundY = hit.Position.Y + playerHeight + 1 end
 		end
-		targetPos = simPos
-		targetVelocity = Vector3.new(targetVelocity.X, simVelY * 0.5, targetVelocity.Z)
 	end
 
-	local leadVelocity = Vector3.new(targetVelocity.X * horizLead, targetVelocity.Y * vertLead, targetVelocity.Z * horizLead)
-
-	if isZero(gravity) then
-		local t = (targetPos - origin).Magnitude / projectileSpeed
-		for _ = 1, 6 do
-			local predicted = targetPos + leadVelocity * t
-			t = (predicted - origin).Magnitude / projectileSpeed
+	local function targetAt(t)
+		local py = targetPos.Y + velY * t
+		if airborne and playerGravity > 0 then
+			py = py - 0.5 * playerGravity * t * t
 		end
-		return targetPos + leadVelocity * t, t
+		if groundY and py < groundY then py = groundY end
+		return Vector3.new(targetPos.X + velX * t, py, targetPos.Z + velZ * t)
 	end
 
-	local t = (targetPos - origin).Magnitude / projectileSpeed
 	local v2 = projectileSpeed * projectileSpeed
+	local t = (targetPos - origin).Magnitude / projectileSpeed
+	local lastT = -1
 
-	for i = 1, 10 do
-		local predicted = targetPos + leadVelocity * t
-		local toTarget = predicted - origin
-		local flat = Vector3.new(toTarget.X, 0, toTarget.Z)
-		local dist = flat.Magnitude
-		local dy = toTarget.Y
+	for _ = 1, 8 do
+		local toTarget = targetAt(t) - origin
+		local dist = Vector3.new(toTarget.X, 0, toTarget.Z).Magnitude
+		if dist < eps then return nil end
 
-		if dist < eps then
-			return nil
+		if isZero(gravity) then
+			t = toTarget.Magnitude / projectileSpeed
+		else
+			local underRoot = v2 * v2 - gravity * (gravity * dist * dist + 2 * toTarget.Y * v2)
+			if underRoot < 0 then return nil end
+			local vxz = projectileSpeed * math.cos(math.atan((v2 - math.sqrt(underRoot)) / (gravity * dist)))
+			if vxz < eps then return nil end
+			t = dist / vxz
 		end
 
-		local underRoot = v2 * v2 - gravity * (gravity * dist * dist + 2 * dy * v2)
-		if underRoot < 0 then
-			return nil
-		end
-
-		local root = math.sqrt(underRoot)
-		local tanTheta = (v2 - root) / (gravity * dist)
-		local theta = math.atan(tanTheta)
-		local vy = projectileSpeed * math.sin(theta)
-		local vxz = projectileSpeed * math.cos(theta)
-
-		if vxz < eps then
-			return nil
-		end
-
-		t = dist / vxz
-
-		if i == 10 then
-			local horizUnit = flat.Unit
-			return origin + Vector3.new(horizUnit.X * vxz, vy, horizUnit.Z * vxz), t
-		end
+		if math.abs(t - lastT) < 0.0005 then break end
+		lastT = t
 	end
+
+	if maxTime and t > maxTime then return nil end
+	if t > 3 or t ~= t then return nil end
+
+	local predicted = targetAt(t)
+	local drift = (predicted - targetPos).Magnitude
+	local maxDrift = math.max(targetVelocity.Magnitude * t * 1.5, 6)
+	if drift > maxDrift then return nil end
+	if isZero(gravity) then return predicted, t end
+
+	local toTarget = predicted - origin
+	local flat = Vector3.new(toTarget.X, 0, toTarget.Z)
+	local dist = flat.Magnitude
+	if dist < eps then return nil end
+
+	local underRoot = v2 * v2 - gravity * (gravity * dist * dist + 2 * toTarget.Y * v2)
+	if underRoot < 0 then return nil end
+	local theta = math.atan((v2 - math.sqrt(underRoot)) / (gravity * dist))
+	local launchXZ = projectileSpeed * math.cos(theta)
+	if launchXZ < eps then return nil end
+	local horizUnit = flat.Unit
+
+	return origin + Vector3.new(horizUnit.X * launchXZ, projectileSpeed * math.sin(theta), horizUnit.Z * launchXZ), t
 end
 
 return module
