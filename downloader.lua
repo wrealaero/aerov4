@@ -68,14 +68,33 @@ local function downloadPremadeProfiles(commit)
 end
 
 if not shared.VapeDeveloper then
-	local commit = 'main'
-	local ok, res = pcall(function()
-		return game:HttpGet('https://api.github.com/repos/wrealaero/aerov4/commits/main', true)
-	end)
-	if ok and res then
-		local h = res:match('"sha":"([a-f0-9]+)"')
-		if h and #h == 40 then commit = h end
+	local commit = isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt') or ''
+	local latest = isfile('aerov4/profiles/latest.txt') and readfile('aerov4/profiles/latest.txt') or ''
+	if #commit ~= 40 then
+		local ok, res = pcall(function()
+			return game:HttpGet('https://api.github.com/repos/wrealaero/aerov4/commits/main', true)
+		end)
+		if ok and res then
+			local h = res:match('"sha":"([a-f0-9]+)"')
+			if h and #h == 40 then commit = h end
+		end
+		if #commit ~= 40 then commit = 'main' end
+		latest = commit
+		pcall(writefile, 'aerov4/profiles/latest.txt', latest)
+	elseif #latest == 40 and latest ~= commit then
+		commit = latest
 	end
+	task.spawn(function()
+		local ok, res = pcall(function()
+			return game:HttpGet('https://api.github.com/repos/wrealaero/aerov4/commits/main', true)
+		end)
+		if ok and res then
+			local h = res:match('"sha":"([a-f0-9]+)"')
+			if h and #h == 40 then
+				pcall(writefile, 'aerov4/profiles/latest.txt', h)
+			end
+		end
+	end)
 	if commit ~= 'main' and (isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt') or '') ~= commit then
 		wipeFolder('aerov4')
 		wipeFolder('aerov4/games')
@@ -88,8 +107,21 @@ if not shared.VapeDeveloper then
 			end
 		end
 	end
+	local oldCommit = isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt') or ''
 	writefile('aerov4/profiles/commit.txt', commit)
-	pcall(downloadPremadeProfiles, commit)
+	local needPremade = (oldCommit ~= commit)
+	if not needPremade then
+		needPremade = true
+		if isfolder('aerov4/profiles/premade') then
+			for _ in listfiles('aerov4/profiles/premade') do
+				needPremade = false
+				break
+			end
+		end
+	end
+	if needPremade then
+		pcall(downloadPremadeProfiles, commit)
+	end
 end
 
 return loadstring(downloadFile('aerov4/main.lua'), 'main')({
