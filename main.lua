@@ -266,8 +266,12 @@ if not shared.VapeIndependent then
 			local suc, res = pcall(function()
 				return game:HttpGet('https://raw.githubusercontent.com/wrealaero/aerov4/' .. readfile('aerov4/profiles/commit.txt') .. '/games/' .. gameFileId .. '.lua', true)
 			end)
-			if suc and res ~= '404: Not Found' then
-				loadstring(downloadFile('aerov4/games/' .. gameFileId .. '.lua'), tostring(gameFileId))(...)
+			if suc and res and res ~= '404: Not Found' then
+				local path = 'aerov4/games/' .. gameFileId .. '.lua'
+				if not isfile(path) then
+					writefile(path, '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.\n' .. res)
+				end
+				loadstring(readfile(path), tostring(gameFileId))(...)
 			end
 		end
 	end
