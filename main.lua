@@ -257,7 +257,7 @@ end
 
 if not shared.VapeIndependent then
 	loadstring(downloadFile('aerov4/games/universal.lua'), 'universal')()
-	local gameFileId = (game.GameId == 2619619496) and (game.PlaceId == 6872265039 and 6872265039 or 6872274481) or game.PlaceId
+	local gameFileId = (game.GameId == 2619619496) and (game.PlaceId == 6872265039 and 6872265039 or 6872274481) or (game.GameId == 10516888336 and 10516888336 or game.PlaceId)
 
 	if isfile('aerov4/games/' .. gameFileId .. '.lua') then
 		local gameSrc = downloadFile('aerov4/games/' .. gameFileId .. '.lua')
