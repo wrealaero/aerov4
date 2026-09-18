@@ -1,7 +1,3 @@
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
---This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.
-
 local mainapi = {
 	Categories = {},
 	GUIColor = {
@@ -7675,11 +7671,6 @@ mainapi:CreateCategory({
 	Size = UDim2.fromOffset(15, 14)
 })
 mainapi:CreateCategory({
-	Name = 'Legit',
-	Icon = getcustomasset('aerov4/assets/new/legiticon.png'),
-	Size = UDim2.fromOffset(15, 15)
-})
-mainapi:CreateCategory({
 	Name = 'Utility',
 	Icon = getcustomasset('aerov4/assets/new/utilityicon.png'),
 	Size = UDim2.fromOffset(15, 14)
@@ -7700,10 +7691,17 @@ mainapi:CreateCategory({
 	Size = UDim2.fromOffset(19, 12)
 })
 mainapi:CreateCategory({
-	Name = 'Kits',
-	Icon = getcustomasset('aerov4/assets/new/kiticon.png'),
+	Name = 'Legit',
+	Icon = getcustomasset('aerov4/assets/new/legiticon.png'),
 	Size = UDim2.fromOffset(15, 15)
 })
+if game.GameId == 2619619496 and game.PlaceId ~= 6872265039 then
+	mainapi:CreateCategory({
+		Name = 'Kits',
+		Icon = getcustomasset('aerov4/assets/new/kiticon.png'),
+		Size = UDim2.fromOffset(15, 15)
+	})
+end
 mainapi.Categories.Main:CreateDivider('misc')
 
 --[[
@@ -8587,9 +8585,9 @@ general:CreateButton({
 		end
 		shared.vapereload = true
 		if shared.VapeDeveloper then
-			loadstring(readfile('aerov4/loader.lua'), 'loader')()
+			loadstring(readfile('aerov4/main.lua'), 'loader')()
 		else
-			loadstring(game:HttpGet('https://raw.githubusercontent.com/wrealaero/aerov4/'..readfile('aerov4/profiles/commit.txt')..'/loader.lua', true))()
+			loadstring(game:HttpGet('https://raw.githubusercontent.com/wrealaero/aerov4/'..readfile('aerov4/profiles/commit.txt')..'/main.lua', true))()
 		end
 	end,
 	Tooltip = 'This will set your profile to the default settings of Vape'
@@ -8606,9 +8604,9 @@ general:CreateButton({
 	Function = function()
 		shared.vapereload = true
 		if shared.VapeDeveloper then
-			loadstring(readfile('aerov4/loader.lua'), 'loader')()
+			loadstring(readfile('aerov4/main.lua'), 'loader')()
 		else
-			loadstring(game:HttpGet('https://raw.githubusercontent.com/wrealaero/aerov4/'..readfile('aerov4/profiles/commit.txt')..'/loader.lua', true))()
+			loadstring(game:HttpGet('https://raw.githubusercontent.com/wrealaero/aerov4/'..readfile('aerov4/profiles/commit.txt')..'/main.lua', true))()
 		end
 	end,
 	Tooltip = 'Reloads vape for debugging purposes'
@@ -8795,9 +8793,9 @@ guipane:CreateDropdown({
 			writefile('aerov4/profiles/gui.txt', val)
 			shared.vapereload = true
 			if shared.VapeDeveloper then
-				loadstring(readfile('aerov4/loader.lua'), 'loader')()
+				loadstring(readfile('aerov4/main.lua'), 'loader')()
 			else
-				loadstring(game:HttpGet('https://raw.githubusercontent.com/wrealaero/aerov4/'..readfile('aerov4/profiles/commit.txt')..'/loader.lua', true))()
+				loadstring(game:HttpGet('https://raw.githubusercontent.com/wrealaero/aerov4/'..readfile('aerov4/profiles/commit.txt')..'/main.lua', true))()
 			end
 		end
 	end,
