@@ -4,7 +4,7 @@ if shared.vape then shared.vape:Uninject() end
 local LOADER_URL = "https://raw.githubusercontent.com/wrealaero/aerov4/main/downloader.lua" 
 local _initArgs = ...
 if type(_initArgs) ~= "table" then _initArgs = {} end
-shared.aerov4User = "fuck nigga"
+shared.aerov4User = "my cutie <3"
 
 if identifyexecutor then
 	if table.find({'Wave', 'Seliware', 'Volt'}, ({identifyexecutor()})[1]) then
