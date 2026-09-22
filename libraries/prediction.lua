@@ -489,17 +489,42 @@ function module.Observe(root, position, velocity, airborne, playerGravity, origi
 	getMotion(root, position, velocity or Vector3.zero, airborne, playerGravity)
 end
 
+local velHistory = setmetatable({}, {__mode = 'k'})
+
+local function getSteadiness(root, velocity)
+	if typeof(root) ~= 'Instance' then return 1, velocity end
+	local now = os.clock()
+	local h = velHistory[root]
+	if not h or now - h.time > 0.5 then
+		velHistory[root] = {vel = velocity, time = now, old = velocity, oldTime = now, smooth = velocity}
+		return 1, velocity
+	end
+	if now - h.oldTime > 0.2 then
+		h.old, h.oldTime = h.vel, h.time
+	end
+	h.vel, h.time = velocity, now
+	h.smooth = h.smooth:Lerp(velocity, 0.5)
+	local a = Vector3.new(velocity.X, 0, velocity.Z)
+	local b = Vector3.new(h.old.X, 0, h.old.Z)
+	if a.Magnitude < 1 then return 0, h.smooth end
+	if b.Magnitude < 1 then return 0.5, h.smooth end
+	return math.clamp(a.Unit:Dot(b.Unit), 0, 1), h.smooth
+end
+
+module.LeadScale = 0.5
+module.MaxLead = 4
+module.MaxVerticalLead = 2
+
+function module.setLead(scale, maxLead, maxVertical)
+	if validNumber(scale) then module.LeadScale = math.clamp(scale, 0, 1) end
+	if validNumber(maxLead) then module.MaxLead = math.max(maxLead, 0) end
+	if validNumber(maxVertical) then module.MaxVerticalLead = math.max(maxVertical, 0) end
+end
+
 module.SolveTrajectory = function(origin, projectileSpeed, gravity, targetPos, targetVelocity, playerGravity, playerHeight, playerJump, params, targetAirborne, targetRootPosition, targetRoot, minimumTime, strict)
 	targetVelocity = targetVelocity or Vector3.zero
 	projectileSpeed = tonumber(projectileSpeed) or 0
 	gravity = tonumber(gravity) or 0
-	playerGravity = tonumber(playerGravity) or workspace.Gravity
-	playerHeight = tonumber(playerHeight) or 0
-
-	if typeof(targetRootPosition) == 'Instance' and targetRootPosition:IsA('BasePart') then
-		targetRoot = targetRootPosition
-		targetRootPosition = targetRoot.Position
-	end
 
 	if not validVector(origin)
 		or not validVector(targetPos)
@@ -512,90 +537,28 @@ module.SolveTrajectory = function(origin, projectileSpeed, gravity, targetPos, t
 		return targetPos, targetPos, 0
 	end
 
-	if not validVector(targetRootPosition) then
-		targetRootPosition = targetPos
-	end
-
 	local projectileAccel = Vector3.new(0, -gravity, 0)
-	local aimHeight = targetPos.Y - targetRootPosition.Y
-
-	local motion = getMotion(targetRoot, targetRootPosition, targetVelocity, targetAirborne, playerGravity)
-	local groundY = motion.groundY or (targetRootPosition.Y - 3)
-	local airborne = targetAirborne == true or motion.airborne == true
-
-	local jumpImpulse = playerJump
-	if not validNumber(jumpImpulse) or jumpImpulse <= 0 then
-		jumpImpulse = motion.jumpImpulse
-	end
-	if not validNumber(jumpImpulse) or jumpImpulse <= 0 then
-		jumpImpulse = 42.6
-	end
-
-	local hasMotion = airborne or motion.holding == true
-
-	local targetGravity = playerGravity
-	if not validNumber(targetGravity) or targetGravity < 0 then
-		targetGravity = workspace.Gravity
-	end
-
 	local maxTime = 10
 	if validNumber(minimumTime) then
 		maxTime = math.max(maxTime, minimumTime + 1)
 	end
 
-	local targetAccel = Vector3.new(0, -(hasMotion and targetGravity or 0), 0)
-
-	local solution = module.SolveIntercept(
-		origin,
-		projectileSpeed,
-		projectileAccel,
-		targetPos,
-		targetVelocity,
-		targetAccel,
-		minimumTime,
-		maxTime,
-		false
-	)
-
+	local root = typeof(targetRoot) == 'Instance' and targetRoot or (typeof(targetRootPosition) == 'Instance' and targetRootPosition) or nil
+	local steady, smooth = getSteadiness(root, targetVelocity)
+	local scaledVelocity = Vector3.new(smooth.X * steady, targetVelocity.Y, smooth.Z * steady) * module.LeadScale
+	local first = module.SolveIntercept(origin, projectileSpeed, projectileAccel, targetPos, scaledVelocity, Vector3.zero, minimumTime, maxTime, false)
+	local flightTime = first and first.FlightTime or 0
+	local lead = scaledVelocity * flightTime
+	local flat = Vector3.new(lead.X, 0, lead.Z)
+	if flat.Magnitude > module.MaxLead then
+		flat = flat.Unit * module.MaxLead
+	end
+	local aimPoint = targetPos + flat + Vector3.new(0, math.clamp(lead.Y, -module.MaxVerticalLead, module.MaxVerticalLead), 0)
+	local solution = module.SolveIntercept(origin, projectileSpeed, projectileAccel, aimPoint, Vector3.zero, Vector3.zero, minimumTime, maxTime, false)
+	
 	if not solution then
 		if strict then return nil end
 		return targetPos, targetPos, 0
-	end
-
-	if hasMotion then
-		local t = solution.FlightTime
-		local rootY = predictVertical(
-			groundY,
-			targetRootPosition.Y,
-			targetVelocity.Y,
-			jumpImpulse,
-			motion.holding == true,
-			targetGravity,
-			t
-		)
-
-		local baked = Vector3.new(
-			targetPos.X + targetVelocity.X * t,
-			rootY + aimHeight,
-			targetPos.Z + targetVelocity.Z * t
-		)
-
-		local corrected = module.SolveIntercept(
-			origin,
-			projectileSpeed,
-			projectileAccel,
-			baked,
-			Vector3.zero,
-			Vector3.zero,
-			minimumTime,
-			maxTime,
-			false
-		)
-
-		if corrected then
-			solution = corrected
-			solution.ImpactPosition = baked
-		end
 	end
 
 	local launchVelocity = solution.InitialVelocity
@@ -611,7 +574,7 @@ module.SolveTrajectory = function(origin, projectileSpeed, gravity, targetPos, t
 		end
 	end
 
-	return origin + launchVelocity, solution.ImpactPosition, solution.FlightTime
+	return origin + launchVelocity, aimPoint, solution.FlightTime
 end
 
 return module
